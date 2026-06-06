@@ -16,14 +16,8 @@ pub fn build(b: *std.Build) void {
 
     const dvui_dep = b.dependency("dvui", .{ .target = target, .optimize = optimize, .backend = .sdl3 });
 
-    const zigimg_dependency = b.dependency("zigimg", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     exe.root_module.addImport("dvui", dvui_dep.module("dvui_sdl3"));
     // exe.root_module.addImport("sdl-backend", dvui_dep.module("sdl3"));
-    exe.root_module.addImport("zigimg", zigimg_dependency.module("zigimg"));
 
     b.installArtifact(exe);
 

@@ -6,10 +6,6 @@
             .url = "git+https://github.com/david-vanderson/dvui?ref=main#9707de2c7e9408b9326bb3c2c83ca0aa603fddca",
             .hash = "dvui-0.5.0-dev-AQFJmbbs9gAKq7l6sNTZ5958PkPBH_dJ7rlbc4D7oYMs",
         },
-        .zigimg = .{
-            .url = "git+https://github.com/zigimg/zigimg.git#4cab5a17d4c76584723576fcc11497293c25d092",
-            .hash = "zigimg-0.1.0-8_eo2sywFwArMrr5UlqjhhAMbRtpmC4mL5KbBmjrxFba",
-        },
     },
     .paths = .{""},
     .fingerprint = 0xc962829413261bcf,

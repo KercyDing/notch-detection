@@ -1,7 +1,8 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const App = dvui.App;
-const zigimg = @import("zigimg");
+
+const max_image_file_size = 64 * 1024 * 1024;
 
 pub const dvui_app: App = .{
     .config = .{
@@ -37,7 +38,7 @@ const AppState = struct {
 
     allocator: std.mem.Allocator,
     img_path: ?[:0]const u8 = null,
-    image: ?zigimg.Image = null,
+    image_bytes: ?[]const u8 = null,
     status: AppStatus = .Idle,
 
     fn init(allocator: std.mem.Allocator) AppState {
@@ -47,8 +48,8 @@ const AppState = struct {
     }
 
     fn deinit(self: *AppState) void {
-        if (self.image) |*img| {
-            img.deinit(self.allocator);
+        if (self.image_bytes) |bytes| {
+            self.allocator.free(bytes);
         }
 
         if (self.img_path) |path| {
@@ -56,9 +57,9 @@ const AppState = struct {
         }
     }
 
-    fn replaceImage(self: *AppState, path: [:0]const u8, image: zigimg.Image) void {
-        if (self.image) |*old_img| {
-            old_img.deinit(self.allocator);
+    fn replaceImage(self: *AppState, path: [:0]const u8, image_bytes: []const u8) void {
+        if (self.image_bytes) |old_bytes| {
+            self.allocator.free(old_bytes);
         }
 
         if (self.img_path) |old_path| {
@@ -66,7 +67,7 @@ const AppState = struct {
         }
 
         self.img_path = path;
-        self.image = image;
+        self.image_bytes = image_bytes;
         self.status = .LoadedImg;
     }
 
@@ -171,12 +172,8 @@ fn drawMainArea(app: *AppState) void {
         dvui.label(@src(), "No Image", .{}, .{});
     }
 
-    if (app.image) |*img| {
-        dvui.label(@src(), "Size: {d} x {d}", .{
-            img.width,
-            img.height,
-        }, .{});
-        drawImagePreview(img);
+    if (app.image_bytes) |bytes| {
+        drawImagePreview(app.img_path.?, bytes);
     }
 }
 
@@ -196,47 +193,48 @@ fn openImageDialog(app: *AppState) !void {
     };
     errdefer app.allocator.free(path);
 
-    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
-    var image = try zigimg.Image.fromFilePath(
-        app.allocator,
+    const image_bytes = try std.Io.Dir.cwd().readFileAlloc(
         dvui.io,
         path,
-        read_buffer[0..],
+        app.allocator,
+        .limited(max_image_file_size),
     );
-    errdefer image.deinit(app.allocator);
+    errdefer app.allocator.free(image_bytes);
 
-    try image.convert(app.allocator, .rgba32);
-
-    app.replaceImage(path, image);
+    app.replaceImage(path, image_bytes);
 
     std.log.info("Loaded image: {s}", .{path});
 }
 
-fn drawImagePreview(img: *zigimg.Image) void {
-    const pixels = img.pixels.rgba32;
-
+fn drawImagePreview(path: []const u8, image_bytes: []const u8) void {
     const source: dvui.ImageSource = .{
-        .pixels = .{
-            .rgba = std.mem.sliceAsBytes(pixels),
-            .width = @intCast(img.width),
-            .height = @intCast(img.height),
+        .imageFile = .{
+            .bytes = image_bytes,
+            .name = path,
             .interpolation = .linear,
             .invalidation = .ptr,
         },
     };
 
+    const image_size = dvui.imageSize(source) catch {
+        dvui.label(@src(), "Unable to decode image", .{}, .{});
+        return;
+    };
+
+    dvui.label(@src(), "Size: {d:.0} x {d:.0}", .{
+        image_size.w,
+        image_size.h,
+    }, .{});
+
     const max_w: f32 = 700;
     const max_h: f32 = 450;
 
-    const iw: f32 = @floatFromInt(img.width);
-    const ih: f32 = @floatFromInt(img.height);
-
-    const scale = @min(max_w / iw, max_h / ih);
+    const scale = @min(max_w / image_size.w, max_h / image_size.h);
 
     _ = dvui.image(@src(), .{ .source = source }, .{
         .min_size_content = .{
-            .w = iw * scale,
-            .h = ih * scale,
+            .w = image_size.w * scale,
+            .h = image_size.h * scale,
         },
     });
 }
