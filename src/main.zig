@@ -95,7 +95,7 @@ pub fn appDeinit() void {
 
     const status = debug_allocator.deinit();
     if (status == .leak) {
-        std.log.err("memory leak detected", .{});
+        std.log.err("Memory leak detected!", .{});
     }
 }
 
@@ -166,9 +166,17 @@ fn drawMainArea(app: *AppState) void {
     dvui.label(@src(), "Mode: {s}", .{app.getStatusName()}, .{});
 
     if (app.img_path) |path| {
-        dvui.label(@src(), "Image: {s}", .{path}, .{});
+        dvui.label(@src(), "Image Path: {s}", .{path}, .{});
     } else {
         dvui.label(@src(), "No Image", .{}, .{});
+    }
+
+    if (app.image) |*img| {
+        dvui.label(@src(), "Size: {d} x {d}", .{
+            img.width,
+            img.height,
+        }, .{});
+        drawImagePreview(img);
     }
 }
 
@@ -186,13 +194,49 @@ fn openImageDialog(app: *AppState) !void {
         std.log.info("Open image cancelled.", .{});
         return;
     };
+    errdefer app.allocator.free(path);
 
-    if (app.img_path) |old_path| {
-        app.allocator.free(old_path);
-    }
+    var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE]u8 = undefined;
+    var image = try zigimg.Image.fromFilePath(
+        app.allocator,
+        dvui.io,
+        path,
+        read_buffer[0..],
+    );
+    errdefer image.deinit(app.allocator);
 
-    app.img_path = path;
-    app.status = .LoadedImg;
+    try image.convert(app.allocator, .rgba32);
 
-    std.log.info("Selected image: {s}", .{path});
+    app.replaceImage(path, image);
+
+    std.log.info("Loaded image: {s}", .{path});
+}
+
+fn drawImagePreview(img: *zigimg.Image) void {
+    const pixels = img.pixels.rgba32;
+
+    const source: dvui.ImageSource = .{
+        .pixels = .{
+            .rgba = std.mem.sliceAsBytes(pixels),
+            .width = @intCast(img.width),
+            .height = @intCast(img.height),
+            .interpolation = .linear,
+            .invalidation = .ptr,
+        },
+    };
+
+    const max_w: f32 = 700;
+    const max_h: f32 = 450;
+
+    const iw: f32 = @floatFromInt(img.width);
+    const ih: f32 = @floatFromInt(img.height);
+
+    const scale = @min(max_w / iw, max_h / ih);
+
+    _ = dvui.image(@src(), .{ .source = source }, .{
+        .min_size_content = .{
+            .w = iw * scale,
+            .h = ih * scale,
+        },
+    });
 }
