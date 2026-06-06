@@ -1,13 +1,14 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const App = dvui.App;
+const image = @import("image.zig");
 
 const max_image_file_size = 64 * 1024 * 1024;
 
 pub const dvui_app: App = .{
     .config = .{
         .options = .{
-            .title = "DVUI Test",
+            .title = "Notch Detection",
             .size = .{ .w = 900, .h = 600 },
             .min_size = .{ .w = 600, .h = 400 },
         },
@@ -29,9 +30,7 @@ pub const std_options: std.Options = .{
 const AppState = struct {
     const AppStatus = enum {
         Idle,
-        OpenImg,
-        LoadedImg,
-        Calculate,
+        Loaded,
         Exit,
         Error,
     };
@@ -39,6 +38,7 @@ const AppState = struct {
     allocator: std.mem.Allocator,
     img_path: ?[:0]const u8 = null,
     image_bytes: ?[]const u8 = null,
+    image_prop: ?image.ImageProp = null,
     status: AppStatus = .Idle,
 
     fn init(allocator: std.mem.Allocator) AppState {
@@ -48,6 +48,10 @@ const AppState = struct {
     }
 
     fn deinit(self: *AppState) void {
+        if (self.image_prop) |*img| {
+            img.deinit();
+        }
+
         if (self.image_bytes) |bytes| {
             self.allocator.free(bytes);
         }
@@ -57,7 +61,16 @@ const AppState = struct {
         }
     }
 
-    fn replaceImage(self: *AppState, path: [:0]const u8, image_bytes: []const u8) void {
+    fn replaceImage(
+        self: *AppState,
+        path: [:0]const u8,
+        image_bytes: []const u8,
+        image_prop: image.ImageProp,
+    ) void {
+        if (self.image_prop) |*old_img| {
+            old_img.deinit();
+        }
+
         if (self.image_bytes) |old_bytes| {
             self.allocator.free(old_bytes);
         }
@@ -68,18 +81,8 @@ const AppState = struct {
 
         self.img_path = path;
         self.image_bytes = image_bytes;
-        self.status = .LoadedImg;
-    }
-
-    fn getStatusName(self: AppState) []const u8 {
-        return switch (self.status) {
-            .Idle => "Idle",
-            .OpenImg => "Open image",
-            .LoadedImg => "Loaded image",
-            .Calculate => "Calculate",
-            .Exit => "Exit",
-            .Error => "Error",
-        };
+        self.image_prop = image_prop;
+        self.status = .Loaded;
     }
 };
 
@@ -108,6 +111,7 @@ pub fn appFrame() !App.Result {
         return result;
     }
     drawMainArea(&app_state);
+    drawStatusBar(&app_state);
 
     return .ok;
 }
@@ -152,7 +156,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
         if (dvui.menuItemLabel(@src(), "Team Info", .{}, .{
             .expand = .horizontal,
         }) != null) {
-            std.log.info("Team info.", .{});
+            std.log.info("TODO.", .{});
             menu.close();
         }
     }
@@ -164,22 +168,53 @@ fn drawMainArea(app: *AppState) void {
     var main_area = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
     defer main_area.deinit();
 
-    dvui.label(@src(), "Mode: {s}", .{app.getStatusName()}, .{});
-
-    if (app.img_path) |path| {
-        dvui.label(@src(), "Image Path: {s}", .{path}, .{});
+    if (app.image_bytes) |bytes| {
+        drawImagePreview(app.img_path.?, bytes);
     } else {
         dvui.label(@src(), "No Image", .{}, .{});
     }
 
-    if (app.image_bytes) |bytes| {
-        drawImagePreview(app.img_path.?, bytes);
+    if (app.image_prop) |img| {
+        const center_x = img.width / 2;
+        const center_y = img.height / 2;
+        const rgba = img.rgbaAt(center_x, center_y);
+
+        dvui.label(@src(), "Center pixel: r={d}, g={d}, b={d}, a={d}", .{
+            rgba[0],
+            rgba[1],
+            rgba[2],
+            rgba[3],
+        }, .{});
+    }
+}
+
+fn drawStatusBar(app: *AppState) void {
+    var status_bar = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .style = .window,
+        .background = true,
+        .expand = .horizontal,
+    });
+    defer status_bar.deinit();
+
+    dvui.label(@src(), "Mode: {s}  ", .{@tagName(app.status)}, .{});
+
+    if (app.image_prop) |img| {
+        dvui.label(@src(), "Size: {d} x {d}  ", .{
+            img.width,
+            img.height,
+        }, .{});
+    } else {
+        dvui.label(@src(), "Size: -  ", .{}, .{});
+    }
+
+    if (app.img_path) |path| {
+        dvui.label(@src(), "Path: {s}", .{path}, .{});
+    } else {
+        dvui.label(@src(), "Path: -", .{}, .{});
     }
 }
 
 fn openImageDialog(app: *AppState) !void {
-    app.status = .OpenImg;
-
     const path_opt = try dvui.dialogNativeFileOpen(app.allocator, .{
         .title = "Open Image",
         .filters = &.{ "*.png", "*.jpg", "*.jpeg", "*.bmp" },
@@ -187,7 +222,6 @@ fn openImageDialog(app: *AppState) !void {
     });
 
     const path = path_opt orelse {
-        app.status = .Idle;
         std.log.info("Open image cancelled.", .{});
         return;
     };
@@ -201,7 +235,13 @@ fn openImageDialog(app: *AppState) !void {
     );
     errdefer app.allocator.free(image_bytes);
 
-    app.replaceImage(path, image_bytes);
+    const image_prop = try image.imageBytesToRgba(image_bytes);
+    errdefer {
+        var tmp = image_prop;
+        tmp.deinit();
+    }
+
+    app.replaceImage(path, image_bytes, image_prop);
 
     std.log.info("Loaded image: {s}", .{path});
 }
@@ -220,11 +260,6 @@ fn drawImagePreview(path: []const u8, image_bytes: []const u8) void {
         dvui.label(@src(), "Unable to decode image", .{}, .{});
         return;
     };
-
-    dvui.label(@src(), "Size: {d:.0} x {d:.0}", .{
-        image_size.w,
-        image_size.h,
-    }, .{});
 
     const max_w: f32 = 700;
     const max_h: f32 = 450;
