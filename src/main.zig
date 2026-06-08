@@ -138,63 +138,80 @@ fn drawTopBar(app: *AppState) ?App.Result {
     });
     defer hbox.deinit();
 
-    var menu = dvui.menu(@src(), .horizontal, .{});
-    defer menu.deinit();
+    {
+        var menu = dvui.menu(@src(), .horizontal, .{});
+        defer menu.deinit();
 
-    if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
-        var popup = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-        defer popup.deinit();
+        if (dvui.menuItemLabel(@src(), "File", .{ .submenu = true }, .{})) |r| {
+            var popup = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+            defer popup.deinit();
 
-        if (dvui.menuItemLabel(@src(), "Open Image", .{}, .{
-            .expand = .horizontal,
-        }) != null) {
-            menu.close();
+            if (dvui.menuItemLabel(@src(), "Open Image", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                menu.close();
 
-            openImageDialog(app) catch |err| {
-                std.log.err("Open image failed: {}", .{err});
-                std.debug.print("──────────\n", .{});
-                app.status = .Error;
-            };
+                openImageDialog(app) catch |err| {
+                    std.log.err("Open image failed: {}", .{err});
+                    std.debug.print("──────────\n", .{});
+                    app.status = .Error;
+                };
+            }
+
+            if (dvui.menuItemLabel(@src(), "Detect Notch", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                menu.close();
+
+                detect.detectImage(app) catch |err| {
+                    std.log.err("Detect image failed: {}", .{err});
+                    std.debug.print("──────────\n", .{});
+                    app.status = .Error;
+                };
+            }
+
+            if (dvui.menuItemLabel(@src(), "Exit", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                return .close;
+            }
         }
 
-        if (dvui.menuItemLabel(@src(), "Detect Notch", .{}, .{
-            .expand = .horizontal,
-        }) != null) {
-            menu.close();
+        if (dvui.menuItemLabel(@src(), "Help", .{ .submenu = true }, .{})) |r| {
+            var popup = dvui.floatingMenu(@src(), .{ .from = r }, .{});
+            defer popup.deinit();
 
-            detect.detectImage(app) catch |err| {
-                std.log.err("Detect image failed: {}", .{err});
+            if (dvui.menuItemLabel(@src(), "Team Info", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                std.debug.print("MADE BY 325 TEAM.\n", .{});
+                std.debug.print("NO AI, NO LLM.\n", .{});
+                std.debug.print("NO OPENCV, NO DENPENDENCIES.\n", .{});
+                std.debug.print("ALGORITHM BY HAND.\n", .{});
                 std.debug.print("──────────\n", .{});
-                app.status = .Error;
-            };
-        }
-
-        if (dvui.menuItemLabel(@src(), "Exit", .{}, .{
-            .expand = .horizontal,
-        }) != null) {
-            return .close;
+                menu.close();
+            }
         }
     }
 
-    if (dvui.menuItemLabel(@src(), "Help", .{ .submenu = true }, .{})) |r| {
-        var popup = dvui.floatingMenu(@src(), .{ .from = r }, .{});
-        defer popup.deinit();
-
-        if (dvui.menuItemLabel(@src(), "Team Info", .{}, .{
-            .expand = .horizontal,
-        }) != null) {
-            std.debug.print("TODO.\n", .{});
-            std.debug.print("──────────\n", .{});
-            menu.close();
-        }
+    {
+        const v_spring = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer v_spring.deinit();
     }
+
+    _ = dvui.label(@src(), "FPS: {d:.1}", .{dvui.FPS()}, .{});
 
     return null;
 }
 
 /// Draw the main area.
 fn drawMainArea(app: *AppState) void {
-    var main_area = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
+    var main_area = dvui.scrollArea(@src(), .{ .vertical = .auto }, .{
+        .expand = .both,
+        .max_size_content = .height(0),
+        .background = true,
+        .color_fill = dvui.Color.fromHex("#202020"),
+    });
     defer main_area.deinit();
 
     if (app.img_bytes) |bytes| {
@@ -210,6 +227,7 @@ fn drawStatusBar(app: *AppState) void {
         .style = .window,
         .background = true,
         .expand = .horizontal,
+        .min_size_content = .{ .w = 0, .h = 20 },
     });
     defer status_bar.deinit();
 
@@ -255,27 +273,44 @@ fn drawImagePreview(path: []const u8, img_bytes: []const u8) void {
     const min_width = image_size.w * scale;
     const min_height = image_size.h * scale;
 
+    {
+        const h_spring = dvui.box(@src(), .{ .dir = .vertical }, .{ .min_size_content = .{ .h = 10 } });
+        defer h_spring.deinit();
+    }
+
     // Slider area.
     {
-        const thresholdSlider = dvui.box(@src(), .{ .dir = .vertical }, .{
+        const thresholdSlider = dvui.box(@src(), .{ .dir = .horizontal }, .{
             .min_size_content = .{
                 .w = min_width,
                 .h = 0,
             },
+            .max_size_content = .width(min_width),
         });
         defer thresholdSlider.deinit();
 
-        _ = dvui.label(@src(), "Threshold:", .{}, .{ .expand = .horizontal });
+        _ = dvui.label(@src(), "Threshold:", .{}, .{ .gravity_y = 0.5 });
 
         _ = dvui.slider(@src(), .{
             .fraction = &detect.threshold_fraq,
             .dir = .horizontal,
-        }, .{ .expand = .horizontal });
+        }, .{
+            .expand = .horizontal,
+            .gravity_y = 0.5,
+        });
 
-        _ = dvui.label(@src(), "{d}/255", .{detect.threshold()}, .{ .min_size_content = .{
-            .w = 40,
-            .h = 0,
-        } });
+        _ = dvui.label(@src(), "{d}/255", .{detect.threshold()}, .{
+            .gravity_y = 0.5,
+            .min_size_content = .{
+                .w = 60,
+                .h = 0,
+            },
+        });
+    }
+
+    {
+        const h_spring = dvui.box(@src(), .{ .dir = .vertical }, .{ .min_size_content = .{ .h = 10 } });
+        defer h_spring.deinit();
     }
 
     _ = dvui.image(@src(), .{ .source = source }, .{
