@@ -1,10 +1,9 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const App = dvui.App;
+const constants = @import("constants.zig");
 const image = @import("image.zig");
 const detect = @import("detect.zig");
-
-const max_image_file_size = 64 * 1024 * 1024;
 
 pub const dvui_app: App = .{
     .config = .{
@@ -279,20 +278,24 @@ fn openImageDialog(app: *AppState) !void {
     };
     errdefer app.allocator.free(path);
 
+    // Get the img_bytes of the given image.
     const img_bytes = try std.Io.Dir.cwd().readFileAlloc(
         dvui.io,
         path,
         app.allocator,
-        .limited(max_image_file_size),
+        .limited(constants.max_image_file_size),
     );
     errdefer app.allocator.free(img_bytes);
 
-    const img_prop = try detect.imageBytesToRgba(img_bytes);
+    // Get the img_prop of the given image.
+    const img_prop = try image.imageBytesToRgba(img_bytes);
     errdefer {
         var tmp = img_prop;
         tmp.deinit();
     }
 
+    // Use the image when "No image",
+    // or replace the old when exists.
     app.replaceImage(path, img_bytes, img_prop);
 
     std.log.info("Loaded image: {s}", .{path});

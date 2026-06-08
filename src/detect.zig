@@ -1,41 +1,31 @@
 const std = @import("std");
 const dvui = @import("dvui");
+const constants = @import("constants.zig");
 const image = @import("image.zig");
 const AppState = @import("root").AppState;
 
 pub fn detectImage(app: *AppState) void {
-    app.status = .Detected;
-}
-
-/// Change image bytes into rgba-ImageProp.
-pub fn imageBytesToRgba(img_bytes: []const u8) !image.ImageProp {
-    var w_i: c_int = 0;
-    var h_i: c_int = 0;
-    var channels_in_file: c_int = 0;
-
-    const data = dvui.c.stbi_load_from_memory(
-        img_bytes.ptr,
-        @intCast(img_bytes.len),
-        &w_i,
-        &h_i,
-        &channels_in_file,
-        4,
-    ) orelse return error.ImageDecodeFailed;
-
-    if (w_i <= 0 or h_i <= 0) {
-        dvui.c.stbi_image_free(data);
-        return error.InvalidImageSize;
+    if (app.img_prop) |prop| {
+        var i: usize = 0;
+        const pix_len = prop.pixels.len;
+        for (0..(pix_len / 4)) |r_idx| {
+            i = (i + 1) % prop.width;
+            if (prop.pixels[4 * r_idx] == 0 or prop.pixels[4 * r_idx] == 255) continue;
+            std.debug.print("({d} {d} {d} {d}) ", .{
+                prop.pixels[4 * r_idx],
+                prop.pixels[4 * r_idx + 1],
+                prop.pixels[4 * r_idx + 2],
+                prop.pixels[4 * r_idx + 3],
+            });
+            if (i == 0) {
+                std.debug.print("\n", .{});
+            }
+        }
+        std.debug.print("\n", .{});
+    } else {
+        std.log.err("No image to detect!", .{});
+        return;
     }
 
-    const w: usize = @intCast(w_i);
-    const h: usize = @intCast(h_i);
-
-    const pixel_count = try std.math.mul(usize, w, h);
-    const len = try std.math.mul(usize, pixel_count, 4);
-
-    return .{
-        .width = w,
-        .height = h,
-        .pixels = data[0..len],
-    };
+    app.status = .Detected;
 }
