@@ -24,7 +24,7 @@ pub const main = App.main;
 pub const panic = App.panic;
 
 pub const std_options: std.Options = .{
-    .log_level = .info,
+    .log_level = .warn,
     .logFn = App.logFn,
 };
 
@@ -98,6 +98,7 @@ var app_state: AppState = undefined;
 fn appInit(win: *dvui.Window) !void {
     _ = win;
     app_state = AppState.init(debug_allocator.allocator());
+    std.debug.print("──────────\n", .{});
 }
 
 /// Deinit of the app.
@@ -107,6 +108,7 @@ fn appDeinit() void {
     const status = debug_allocator.deinit();
     if (status == .leak) {
         std.log.err("Memory leak detected!", .{});
+        std.debug.print("──────────\n", .{});
     }
 }
 
@@ -150,6 +152,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
 
             openImageDialog(app) catch |err| {
                 std.log.err("Open image failed: {}", .{err});
+                std.debug.print("──────────\n", .{});
                 app.status = .Error;
             };
         }
@@ -161,6 +164,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
 
             detect.detectImage(app) catch |err| {
                 std.log.err("Detect image failed: {}", .{err});
+                std.debug.print("──────────\n", .{});
                 app.status = .Error;
             };
         }
@@ -179,7 +183,8 @@ fn drawTopBar(app: *AppState) ?App.Result {
         if (dvui.menuItemLabel(@src(), "Team Info", .{}, .{
             .expand = .horizontal,
         }) != null) {
-            std.log.info("TODO.", .{});
+            std.debug.print("TODO.\n", .{});
+            std.debug.print("──────────\n", .{});
             menu.close();
         }
     }
@@ -290,7 +295,8 @@ fn openImageDialog(app: *AppState) !void {
     });
 
     const path = path_opt orelse {
-        std.log.info("Open image cancelled.", .{});
+        std.debug.print("Open image cancelled.\n", .{});
+        std.debug.print("──────────\n", .{});
         return;
     };
     errdefer app.allocator.free(path);
@@ -315,6 +321,6 @@ fn openImageDialog(app: *AppState) !void {
     // or replace the old when exists.
     app.replaceImage(path, img_bytes, img_prop);
 
-    std.debug.print("──────────────────────────────────────────────────────\n", .{});
-    std.log.info("Loaded image: {s}", .{path});
+    std.debug.print("Loaded image: {s}\n", .{path});
+    std.debug.print("──────────\n", .{});
 }

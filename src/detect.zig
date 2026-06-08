@@ -3,7 +3,7 @@ const image = @import("image.zig");
 const GrayImgProp = image.GrayImgProp;
 const AppState = @import("root").AppState;
 
-pub var threshold_fraq: f32 = 0.5;
+pub var threshold_fraq: f32 = 50.0 / 255.0;
 
 /// Get the gray threshold with threshold_fraq.
 pub fn threshold() u8 {
@@ -33,9 +33,11 @@ pub fn detectImage(app: *AppState) !void {
             std.log.err("No white pixel detected: {}", .{err});
             std.log.err("Please try lowering the threshold,", .{});
             std.log.err("or change with the correct image.", .{});
+            std.debug.print("──────────\n", .{});
         };
     } else {
         std.log.err("Cannot find image.", .{});
+        std.debug.print("──────────\n", .{});
         return;
     }
 
@@ -69,7 +71,10 @@ fn detectBinary(prop: GrayImgProp, stats: *BinaryStats) !void {
             stats.white_count += 1;
         } else if (pixel == 0) { // black
             stats.black_count += 1;
-        } else std.log.err("The grayToBinary conversion failed.", .{});
+        } else {
+            std.log.err("The grayToBinary conversion failed.", .{});
+            std.debug.print("──────────\n", .{});
+        }
     }
 
     if (stats.white_count == 0) return error.NoWhiteDetected;
@@ -81,11 +86,11 @@ inline fn showInfo(stats: BinaryStats) void {
     const box_w = stats.max_x - stats.min_x + 1;
     const box_h = stats.max_y - stats.min_y + 1;
 
-    std.log.info("min_x: {d}", .{stats.min_x});
-    std.log.info("min_y: {d}", .{stats.min_y});
-    std.log.info("max_x: {d}", .{stats.max_x});
-    std.log.info("max_y: {d}", .{stats.max_y});
-    std.log.info("box_w: {d}", .{box_w});
-    std.log.info("box_h: {d}", .{box_h});
-    std.log.info("", .{});
+    std.debug.print("min_x: {d}\n", .{stats.min_x});
+    std.debug.print("min_y: {d}\n", .{stats.min_y});
+    std.debug.print("max_x: {d}\n", .{stats.max_x});
+    std.debug.print("max_y: {d}\n", .{stats.max_y});
+    std.debug.print("box_w: {d}\n", .{box_w});
+    std.debug.print("box_h: {d}\n", .{box_h});
+    std.debug.print("──────────\n", .{});
 }
