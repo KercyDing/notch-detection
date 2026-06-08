@@ -1,16 +1,17 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const App = dvui.App;
-const constants = @import("constants.zig");
 const image = @import("image.zig");
 const detect = @import("detect.zig");
+
+const max_image_file_size = 64 * 1024 * 1024;
 
 pub const dvui_app: App = .{
     .config = .{
         .options = .{
             .title = "Notch Detection",
             .size = .{ .w = 900, .h = 600 },
-            .min_size = .{ .w = 600, .h = 400 },
+            .min_size = .{ .w = 750, .h = 500 },
         },
     },
     .initFn = appInit,
@@ -40,7 +41,7 @@ pub const AppState = struct {
     allocator: std.mem.Allocator,
     img_path: ?[:0]const u8 = null,
     img_bytes: ?[]const u8 = null,
-    img_prop: ?image.ImageProp = null,
+    img_prop: ?image.RgbaImgProp = null,
     status: AppStatus = .Idle,
 
     fn init(allocator: std.mem.Allocator) AppState {
@@ -69,7 +70,7 @@ pub const AppState = struct {
         self: *AppState,
         img_path: [:0]const u8,
         img_bytes: []const u8,
-        img_prop: image.ImageProp,
+        img_prop: image.RgbaImgProp,
     ) void {
         if (self.img_prop) |*old_img| {
             old_img.deinit();
@@ -158,7 +159,10 @@ fn drawTopBar(app: *AppState) ?App.Result {
         }) != null) {
             menu.close();
 
-            detect.detectImage(&app_state);
+            detect.detectImage(app) catch |err| {
+                std.log.err("Detect image failed: {}", .{err});
+                app.status = .Error;
+            };
         }
 
         if (dvui.menuItemLabel(@src(), "Exit", .{}, .{
@@ -193,19 +197,6 @@ fn drawMainArea(app: *AppState) void {
     } else {
         dvui.label(@src(), "No Image", .{}, .{});
     }
-
-    // if (app.img_prop) |img| {
-    //     const center_x = img.width / 2;
-    //     const center_y = img.height / 2;
-    //     const rgba = img.rgbaAt(center_x, center_y);
-
-    //     dvui.label(@src(), "Center pixel: r={d}, g={d}, b={d}, a={d}", .{
-    //         rgba[0],
-    //         rgba[1],
-    //         rgba[2],
-    //         rgba[3],
-    //     }, .{});
-    // }
 }
 
 /// Draw the status bar.
@@ -256,10 +247,36 @@ fn drawImagePreview(path: []const u8, img_bytes: []const u8) void {
 
     const scale = @min(max_w / image_size.w, max_h / image_size.h);
 
+    const min_width = image_size.w * scale;
+    const min_height = image_size.h * scale;
+
+    // Slider area.
+    {
+        const thresholdSlider = dvui.box(@src(), .{ .dir = .vertical }, .{
+            .min_size_content = .{
+                .w = min_width,
+                .h = 0,
+            },
+        });
+        defer thresholdSlider.deinit();
+
+        _ = dvui.label(@src(), "Threshold:", .{}, .{ .expand = .horizontal });
+
+        _ = dvui.slider(@src(), .{
+            .fraction = &detect.threshold_fraq,
+            .dir = .horizontal,
+        }, .{ .expand = .horizontal });
+
+        _ = dvui.label(@src(), "{d}/255", .{detect.threshold()}, .{ .min_size_content = .{
+            .w = 40,
+            .h = 0,
+        } });
+    }
+
     _ = dvui.image(@src(), .{ .source = source }, .{
         .min_size_content = .{
-            .w = image_size.w * scale,
-            .h = image_size.h * scale,
+            .w = min_width,
+            .h = min_height,
         },
     });
 }
@@ -283,7 +300,7 @@ fn openImageDialog(app: *AppState) !void {
         dvui.io,
         path,
         app.allocator,
-        .limited(constants.max_image_file_size),
+        .limited(max_image_file_size),
     );
     errdefer app.allocator.free(img_bytes);
 
@@ -298,5 +315,6 @@ fn openImageDialog(app: *AppState) !void {
     // or replace the old when exists.
     app.replaceImage(path, img_bytes, img_prop);
 
+    std.debug.print("──────────────────────────────────────────────────────\n", .{});
     std.log.info("Loaded image: {s}", .{path});
 }
