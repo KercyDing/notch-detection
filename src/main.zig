@@ -2,6 +2,7 @@ const std = @import("std");
 const dvui = @import("dvui");
 const App = dvui.App;
 const image = @import("image.zig");
+const detect = @import("detect.zig");
 
 const max_image_file_size = 64 * 1024 * 1024;
 
@@ -27,8 +28,9 @@ pub const std_options: std.Options = .{
     .logFn = App.logFn,
 };
 
-const AppState = struct {
-    const AppStatus = enum {
+/// Record the current state of the app.
+pub const AppState = struct {
+    pub const AppStatus = enum {
         Idle,
         Loaded,
         Exit,
@@ -61,6 +63,8 @@ const AppState = struct {
         }
     }
 
+    /// Replace the old image with the new.
+    /// Deinit and free the old to avoid err.
     fn replaceImage(
         self: *AppState,
         path: [:0]const u8,
@@ -89,12 +93,14 @@ const AppState = struct {
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 var app_state: AppState = undefined;
 
-pub fn appInit(win: *dvui.Window) !void {
+/// Init entry of the app.
+fn appInit(win: *dvui.Window) !void {
     _ = win;
     app_state = AppState.init(debug_allocator.allocator());
 }
 
-pub fn appDeinit() void {
+/// Deinit of the app.
+fn appDeinit() void {
     app_state.deinit();
 
     const status = debug_allocator.deinit();
@@ -103,10 +109,14 @@ pub fn appDeinit() void {
     }
 }
 
-pub fn appFrame() !App.Result {
+/// Root frame of the app.
+fn appFrame() !App.Result {
     var root = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
     defer root.deinit();
 
+    // It may return ".close" with "Exit" pressed,
+    // we need to catch the result,
+    // then appFrame would close in loop.
     if (drawTopBar(&app_state)) |result| {
         return result;
     }
@@ -116,6 +126,7 @@ pub fn appFrame() !App.Result {
     return .ok;
 }
 
+/// Draw the top bar.
 fn drawTopBar(app: *AppState) ?App.Result {
     var hbox = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .style = .window,
@@ -164,6 +175,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
     return null;
 }
 
+/// Draw the main area.
 fn drawMainArea(app: *AppState) void {
     var main_area = dvui.box(@src(), .{ .dir = .vertical }, .{ .expand = .both });
     defer main_area.deinit();
@@ -188,6 +200,7 @@ fn drawMainArea(app: *AppState) void {
     }
 }
 
+/// Draw the status bar.
 fn drawStatusBar(app: *AppState) void {
     var status_bar = dvui.box(@src(), .{ .dir = .horizontal }, .{
         .style = .window,
@@ -214,38 +227,7 @@ fn drawStatusBar(app: *AppState) void {
     }
 }
 
-fn openImageDialog(app: *AppState) !void {
-    const path_opt = try dvui.dialogNativeFileOpen(app.allocator, .{
-        .title = "Open Image",
-        .filters = &.{ "*.png", "*.jpg", "*.jpeg", "*.bmp" },
-        .filter_description = "Image files",
-    });
-
-    const path = path_opt orelse {
-        std.log.info("Open image cancelled.", .{});
-        return;
-    };
-    errdefer app.allocator.free(path);
-
-    const image_bytes = try std.Io.Dir.cwd().readFileAlloc(
-        dvui.io,
-        path,
-        app.allocator,
-        .limited(max_image_file_size),
-    );
-    errdefer app.allocator.free(image_bytes);
-
-    const image_prop = try image.imageBytesToRgba(image_bytes);
-    errdefer {
-        var tmp = image_prop;
-        tmp.deinit();
-    }
-
-    app.replaceImage(path, image_bytes, image_prop);
-
-    std.log.info("Loaded image: {s}", .{path});
-}
-
+/// Draw the preview of the opened image.
 fn drawImagePreview(path: []const u8, image_bytes: []const u8) void {
     const source: dvui.ImageSource = .{
         .imageFile = .{
@@ -272,4 +254,37 @@ fn drawImagePreview(path: []const u8, image_bytes: []const u8) void {
             .h = image_size.h * scale,
         },
     });
+}
+
+/// Open system dialog to choose the image.
+fn openImageDialog(app: *AppState) !void {
+    const path_opt = try dvui.dialogNativeFileOpen(app.allocator, .{
+        .title = "Open Image",
+        .filters = &.{ "*.png", "*.jpg", "*.jpeg", "*.bmp" },
+        .filter_description = "Image files",
+    });
+
+    const path = path_opt orelse {
+        std.log.info("Open image cancelled.", .{});
+        return;
+    };
+    errdefer app.allocator.free(path);
+
+    const image_bytes = try std.Io.Dir.cwd().readFileAlloc(
+        dvui.io,
+        path,
+        app.allocator,
+        .limited(max_image_file_size),
+    );
+    errdefer app.allocator.free(image_bytes);
+
+    const image_prop = try detect.imageBytesToRgba(image_bytes);
+    errdefer {
+        var tmp = image_prop;
+        tmp.deinit();
+    }
+
+    app.replaceImage(path, image_bytes, image_prop);
+
+    std.log.info("Loaded image: {s}", .{path});
 }
