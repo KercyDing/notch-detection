@@ -1,0 +1,17 @@
+!label false
+
+% Debug Build.
+b():
+    zig build
+
+% Debug Run.
+r():
+    zig build run
+
+% Clean Cache, Output and Pkg.
+c():
+    rm -rf .zig-cache zig-out zig-pkg
+
+% Publish Release.
+p():
+    zig build -Doptimize=ReleaseSafe -Dstrip=true
