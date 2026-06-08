@@ -1,20 +1,21 @@
 const std = @import("std");
 const dvui = @import("dvui");
 const image = @import("image.zig");
+const AppState = @import("root").AppState;
 
-pub fn detectImage(image_prop: image.ImageProp) void {
-    _ = image_prop;
+pub fn detectImage(app: *AppState) void {
+    app.status = .Detected;
 }
 
 /// Change image bytes into rgba-ImageProp.
-pub fn imageBytesToRgba(image_bytes: []const u8) !image.ImageProp {
+pub fn imageBytesToRgba(img_bytes: []const u8) !image.ImageProp {
     var w_i: c_int = 0;
     var h_i: c_int = 0;
     var channels_in_file: c_int = 0;
 
     const data = dvui.c.stbi_load_from_memory(
-        image_bytes.ptr,
-        @intCast(image_bytes.len),
+        img_bytes.ptr,
+        @intCast(img_bytes.len),
         &w_i,
         &h_i,
         &channels_in_file,
