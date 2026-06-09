@@ -98,7 +98,7 @@ var app_state: AppState = undefined;
 fn appInit(win: *dvui.Window) !void {
     _ = win;
     app_state = AppState.init(debug_allocator.allocator());
-    std.debug.print("──────────\n", .{});
+    endPrint();
 }
 
 /// Deinit of the app.
@@ -108,7 +108,7 @@ fn appDeinit() void {
     const status = debug_allocator.deinit();
     if (status == .leak) {
         std.log.err("Memory leak detected!", .{});
-        std.debug.print("──────────\n", .{});
+        endPrint();
     }
 }
 
@@ -153,7 +153,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
 
                 openImageDialog(app) catch |err| {
                     std.log.err("Open image failed: {}", .{err});
-                    std.debug.print("──────────\n", .{});
+                    endPrint();
                     app.status = .Error;
                 };
             }
@@ -165,7 +165,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
 
                 detect.detectImage(app) catch |err| {
                     std.log.err("Detect image failed: {}", .{err});
-                    std.debug.print("──────────\n", .{});
+                    endPrint();
                     app.status = .Error;
                 };
             }
@@ -187,7 +187,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
             }) != null) {
                 const teaminfo = @embedFile("teaminfo");
                 std.debug.print("{s}\n", .{teaminfo});
-                std.debug.print("──────────\n", .{});
+                endPrint();
                 menu.close();
             }
 
@@ -196,7 +196,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
             }) != null) {
                 const license = @embedFile("license");
                 std.debug.print("{s}\n", .{license});
-                std.debug.print("──────────\n", .{});
+                endPrint();
                 menu.close();
             }
         }
@@ -207,7 +207,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
         defer v_spring.deinit();
     }
 
-    _ = dvui.label(@src(), "FPS: {d:.1}", .{dvui.FPS()}, .{});
+    _ = dvui.label(@src(), "{d:.1} FPS", .{dvui.FPS()}, .{});
 
     return null;
 }
@@ -339,7 +339,7 @@ fn openImageDialog(app: *AppState) !void {
 
     const path = path_opt orelse {
         std.debug.print("Open image cancelled.\n", .{});
-        std.debug.print("──────────\n", .{});
+        endPrint();
         return;
     };
     errdefer app.allocator.free(path);
@@ -364,6 +364,10 @@ fn openImageDialog(app: *AppState) !void {
     // or replace the old when exists.
     app.replaceImage(path, img_bytes, img_prop);
 
-    std.debug.print("Loaded image: {s}\n", .{path});
-    std.debug.print("──────────\n", .{});
+    std.debug.print("Loaded image.\n", .{});
+    endPrint();
+}
+
+pub inline fn endPrint() void {
+    std.debug.print("───────────────\n", .{});
 }
