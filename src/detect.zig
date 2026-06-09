@@ -92,6 +92,7 @@ fn detectBinary(prop: GrayImgProp, stats: *BinaryStats) !void {
     try detectHorizonalEdge(prop, stats.max_x, stats.min_y, stats.max_y);
 }
 
+/// Detect notch of top/bottom edge in range.
 inline fn detectVerticalEdge(prop: GrayImgProp, y: usize, left: usize, right: usize) !void {
     std.debug.assert(left < right);
 
@@ -119,6 +120,7 @@ inline fn detectVerticalEdge(prop: GrayImgProp, y: usize, left: usize, right: us
     endPrint();
 }
 
+/// Detect notch of left/right edge in range.
 inline fn detectHorizonalEdge(prop: GrayImgProp, x: usize, top: usize, btm: usize) !void {
     std.debug.assert(top < btm);
 
@@ -160,6 +162,9 @@ inline fn debugBasicInfo(stats: BinaryStats) void {
     endPrint();
 }
 
+/// Transform the num in its side into the real.
 inline fn transform(num: usize, side_len: usize) usize {
-    return (num * 1000 + side_len / 2) / side_len;
+    const real: usize = 1000;
+
+    return (num * real + side_len / 2) / side_len;
 }

@@ -158,18 +158,6 @@ fn drawTopBar(app: *AppState) ?App.Result {
                 };
             }
 
-            if (dvui.menuItemLabel(@src(), "Detect Notch", .{}, .{
-                .expand = .horizontal,
-            }) != null) {
-                menu.close();
-
-                detect.detectImage(app) catch |err| {
-                    std.log.err("Detect image failed: {}", .{err});
-                    endPrint();
-                    app.status = .Error;
-                };
-            }
-
             if (dvui.menuItemLabel(@src(), "Exit", .{}, .{
                 .expand = .horizontal,
             }) != null) {
@@ -218,12 +206,13 @@ fn drawMainArea(app: *AppState) void {
         .expand = .both,
         .max_size_content = .height(0),
         .background = true,
+        .corner_radius = dvui.Rect.all(0),
         .color_fill = dvui.Color.fromHex("#202020"),
     });
     defer main_area.deinit();
 
-    if (app.img_bytes) |bytes| {
-        drawImagePreview(app.img_path.?, bytes);
+    if (app.img_bytes != null) {
+        drawImagePreview(app);
     } else {
         dvui.label(@src(), "No Image", .{}, .{});
     }
@@ -258,11 +247,11 @@ fn drawStatusBar(app: *AppState) void {
 }
 
 /// Draw the preview of the opened image.
-fn drawImagePreview(path: []const u8, img_bytes: []const u8) void {
+fn drawImagePreview(app: *AppState) void {
     const source: dvui.ImageSource = .{
         .imageFile = .{
-            .bytes = img_bytes,
-            .name = path,
+            .bytes = app.img_bytes.?,
+            .name = app.img_path.?,
             .interpolation = .linear,
             .invalidation = .ptr,
         },
@@ -314,6 +303,30 @@ fn drawImagePreview(path: []const u8, img_bytes: []const u8) void {
                 .h = 0,
             },
         });
+    }
+
+    // Button Area.
+    {
+        const buttonArea = dvui.box(@src(), .{ .dir = .horizontal }, .{
+            .min_size_content = .{
+                .w = min_width,
+                .h = 0,
+            },
+            .max_size_content = .width(min_width),
+        });
+        defer buttonArea.deinit();
+
+        // Detect Notch.
+        if (dvui.button(@src(), "Detect Notch", .{}, .{ .min_size_content = .{ .w = 40 } })) {
+            detect.detectImage(app) catch |err| {
+                std.log.err("Detect image failed: {}", .{err});
+                endPrint();
+                app.status = .Error;
+            };
+        }
+
+        const v_spring = dvui.box(@src(), .{ .dir = .horizontal }, .{ .expand = .horizontal });
+        defer v_spring.deinit();
     }
 
     {
