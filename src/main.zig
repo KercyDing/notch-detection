@@ -173,6 +173,7 @@ fn drawTopBar(app: *AppState) ?App.Result {
             if (dvui.menuItemLabel(@src(), "Exit", .{}, .{
                 .expand = .horizontal,
             }) != null) {
+                std.debug.print("Exited.\n", .{});
                 return .close;
             }
         }
@@ -181,13 +182,20 @@ fn drawTopBar(app: *AppState) ?App.Result {
             var popup = dvui.floatingMenu(@src(), .{ .from = r }, .{});
             defer popup.deinit();
 
-            if (dvui.menuItemLabel(@src(), "Team Info", .{}, .{
+            if (dvui.menuItemLabel(@src(), "Soft Info", .{}, .{
                 .expand = .horizontal,
             }) != null) {
-                std.debug.print("MADE BY 325 TEAM.\n", .{});
-                std.debug.print("NO AI, NO LLM.\n", .{});
-                std.debug.print("NO OPENCV, NO DENPENDENCIES.\n", .{});
-                std.debug.print("ALGORITHM BY HAND.\n", .{});
+                const teaminfo = @embedFile("teaminfo");
+                std.debug.print("{s}\n", .{teaminfo});
+                std.debug.print("──────────\n", .{});
+                menu.close();
+            }
+
+            if (dvui.menuItemLabel(@src(), "License", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                const license = @embedFile("license");
+                std.debug.print("{s}\n", .{license});
                 std.debug.print("──────────\n", .{});
                 menu.close();
             }

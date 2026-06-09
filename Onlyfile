@@ -3,15 +3,23 @@
 % Debug Build.
 b():
     zig build
+    echo 'Done.'
 
 % Debug Run.
 r():
     zig build run
 
+% Format.
+f():
+    zig fmt .
+    echo 'Done.'
+
 % Clean Cache, Output and Pkg.
 c():
     rm -rf .zig-cache zig-out zig-pkg
+    echo 'Done.'
 
 % Publish Release.
 p():
     zig build -Doptimize=ReleaseSafe -Dstrip=true
+    echo 'Done.'

@@ -8,7 +8,7 @@ Our notch-detection GUI written by zig with [dvui](https://github.com/david-vand
 
 - Require:
   - **Zig** ([0.16.0](https://ziglang.org/download/#release-0.16.0))
-- Maybe(Written by me):
+- You may:
   - **Only** ([repo](https://github.com/KercyDing/only))
 
 Run:
@@ -18,10 +18,8 @@ zig build run
 # only r
 ```
 
-## Why Zig?
+## TEAMINFO
 
-C/C++ is boring, Rust is difficult, Python is too slow.
-
-Zig is modern C, and it's explicit to write.
-
-That's it.
+- MADE BY TEAM 325.
+- NO AI, NO LLM.
+- ALGORITHM BY HAND.
