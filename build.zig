@@ -25,8 +25,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addAnonymousImport("license", .{
         .root_source_file = b.path("LICENSE"),
     });
-    exe.root_module.addAnonymousImport("teaminfo", .{
-        .root_source_file = b.path("TEAMINFO"),
+    exe.root_module.addAnonymousImport("softinfo", .{
+        .root_source_file = b.path("SOFTINFO"),
     });
 
     b.installArtifact(exe);

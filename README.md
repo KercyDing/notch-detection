@@ -18,7 +18,7 @@ zig build run
 # only r
 ```
 
-## TEAMINFO
+## Soft Info
 
 - MADE BY TEAM 325.
 - NO AI, NO LLM.

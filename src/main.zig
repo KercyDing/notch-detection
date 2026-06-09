@@ -1,10 +1,15 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dvui = @import("dvui");
 const App = dvui.App;
 const image = @import("image.zig");
 const detect = @import("detect.zig");
 
 const max_image_file_size = 64 * 1024 * 1024;
+const repo_url = "https://code.kercy666.com/Kercy/notch-detection";
+
+var show_softinfo: bool = false;
+var show_license: bool = false;
 
 pub const dvui_app: App = .{
     .config = .{
@@ -125,6 +130,8 @@ fn appFrame() !App.Result {
     }
     drawMainArea(&app_state);
     drawStatusBar(&app_state);
+    drawInfoWindow("Soft Info", @embedFile("softinfo"), &show_softinfo, 1, .{ .w = 300, .h = 200 });
+    drawInfoWindow("License", @embedFile("license"), &show_license, 2, .{ .w = 560, .h = 360 });
 
     return .ok;
 }
@@ -173,18 +180,25 @@ fn drawTopBar(app: *AppState) ?App.Result {
             if (dvui.menuItemLabel(@src(), "Soft Info", .{}, .{
                 .expand = .horizontal,
             }) != null) {
-                const teaminfo = @embedFile("teaminfo");
-                std.debug.print("{s}\n", .{teaminfo});
-                endPrint();
+                show_softinfo = true;
+                menu.close();
+            }
+
+            if (dvui.menuItemLabel(@src(), "Go Repo", .{}, .{
+                .expand = .horizontal,
+            }) != null) {
+                openUrl(repo_url) catch |err| {
+                    std.log.err("Open repo failed: {}", .{err});
+                    endPrint();
+                    app.status = .Error;
+                };
                 menu.close();
             }
 
             if (dvui.menuItemLabel(@src(), "License", .{}, .{
                 .expand = .horizontal,
             }) != null) {
-                const license = @embedFile("license");
-                std.debug.print("{s}\n", .{license});
-                endPrint();
+                show_license = true;
                 menu.close();
             }
         }
@@ -340,6 +354,99 @@ fn drawImagePreview(app: *AppState) void {
             .h = min_height,
         },
     });
+}
+
+/// Draw a text info floating window.
+fn drawInfoWindow(
+    title: []const u8,
+    text: []const u8,
+    open_flag: *bool,
+    id_extra: usize,
+    size: dvui.Size,
+) void {
+    if (!open_flag.*) return;
+
+    var win = dvui.floatingWindow(@src(), .{
+        .open_flag = open_flag,
+        .resize = .none,
+    }, .{
+        .id_extra = id_extra,
+        .min_size_content = size,
+        .max_size_content = .{ .w = size.w, .h = size.h },
+    });
+    defer win.deinit();
+
+    drawInfoWindowHeader(title, open_flag, id_extra);
+    win.dragAreaSet(.{ .x = -1, .y = -1, .w = 0, .h = 0 });
+
+    var content = dvui.box(@src(), .{}, .{
+        .id_extra = id_extra,
+        .expand = .both,
+        .padding = dvui.Rect.all(10),
+    });
+    defer content.deinit();
+
+    var scroll = dvui.scrollArea(@src(), .{ .vertical = .auto }, .{
+        .id_extra = id_extra,
+        .expand = .both,
+        .background = false,
+        .corner_radius = dvui.Rect.all(0),
+    });
+    defer scroll.deinit();
+
+    var tl = dvui.textLayout(@src(), .{}, .{
+        .id_extra = id_extra,
+        .expand = .horizontal,
+        .background = false,
+    });
+    defer tl.deinit();
+    tl.addText(text, .{});
+}
+
+/// Draw a info window title bar.
+fn drawInfoWindowHeader(title: []const u8, open_flag: *bool, id_extra: usize) void {
+    var header = dvui.box(@src(), .{ .dir = .horizontal }, .{
+        .id_extra = id_extra,
+        .expand = .horizontal,
+        .background = true,
+        .color_fill = dvui.Color.fromHex("#2b2b2b"),
+        .border = .{ .h = 1 },
+        .padding = dvui.Rect.all(4),
+    });
+    defer header.deinit();
+
+    dvui.labelNoFmt(@src(), title, .{}, .{
+        .id_extra = id_extra,
+        .expand = .horizontal,
+        .gravity_y = 0.5,
+        .font = .theme(.heading),
+    });
+
+    if (dvui.buttonIcon(@src(), "close_info_window", dvui.entypo.cross, .{}, .{}, .{
+        .id_extra = id_extra,
+        .min_size_content = .all(20),
+        .max_size_content = .width(20),
+        .padding = dvui.Rect.all(2),
+        .gravity_y = 0.5,
+    })) {
+        open_flag.* = false;
+    }
+}
+
+/// Open a URL with the platform default browser.
+fn openUrl(url: []const u8) !void {
+    const argv = switch (builtin.os.tag) {
+        .windows => &[_][]const u8{ "rundll32", "url.dll,FileProtocolHandler", url },
+        .macos => &[_][]const u8{ "open", url },
+        else => &[_][]const u8{ "xdg-open", url },
+    };
+
+    var child = try std.process.spawn(dvui.io, .{ .argv = argv });
+    const term = try child.wait(dvui.io);
+    switch (term) {
+        .exited => |code| if (code != 0) return error.OpenUrlFailed,
+        else => return error.OpenUrlFailed,
+    }
 }
 
 /// Open system dialog to choose the image.
