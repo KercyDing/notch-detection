@@ -65,18 +65,19 @@ pub const GrayImgProp = struct {
         self.* = undefined;
     }
 
-    pub fn index(self: GrayImgProp, x: usize, y: usize) !usize {
-        if (x >= self.width or y >= self.height) return error.OverFlow;
+    pub fn index(self: GrayImgProp, x: usize, y: usize) usize {
+        std.debug.assert(x < self.width);
+        std.debug.assert(y < self.height);
 
         return y * self.width + x;
     }
 
-    pub fn at(self: GrayImgProp, x: usize, y: usize) !u8 {
-        return self.pixels[try self.index(x, y)];
+    pub fn at(self: GrayImgProp, x: usize, y: usize) u8 {
+        return self.pixels[self.index(x, y)];
     }
 
-    pub fn set(self: *GrayImgProp, x: usize, y: usize, value: u8) !void {
-        self.pixels[try self.index(x, y)] = value;
+    pub fn set(self: *GrayImgProp, x: usize, y: usize, value: u8) void {
+        self.pixels[self.index(x, y)] = value;
     }
 };
 
@@ -112,7 +113,7 @@ pub fn imageBytesToGray(allocator: std.mem.Allocator, img_bytes: []const u8) !Gr
 
     for (0..rgba.height) |y| {
         for (0..rgba.width) |x| {
-            try gray_img.set(x, y, rgba.grayAt(x, y));
+            gray_img.set(x, y, rgba.grayAt(x, y));
         }
     }
 
