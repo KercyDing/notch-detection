@@ -488,6 +488,8 @@ fn openImageDialog(app: *AppState) !void {
     endPrint();
 }
 
+/// Use it when print-block ends,
+/// because I have a compulsion for alignment.
 pub inline fn endPrint() void {
     std.debug.print("───────────────\n", .{});
 }

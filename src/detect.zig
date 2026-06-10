@@ -20,6 +20,11 @@ const BinaryStats = struct {
     max_y: usize = 0,
 };
 
+const ImgEdgeDir = enum {
+    Vertical,
+    Horizontal,
+};
+
 /// Detect the notch of the image.
 pub fn detectImage(app: *AppState) !void {
     var stats: BinaryStats = .{};
@@ -83,71 +88,56 @@ fn detectBinary(prop: GrayImgProp, stats: *BinaryStats) !void {
     // debugBasicInfo(stats.*);
 
     std.debug.print("Top:\n", .{});
-    try detectVerticalEdge(prop, stats.min_y, stats.min_x, stats.max_x);
+    try detectEdge(prop, .Vertical, stats.min_y, stats.min_x, stats.max_x);
     std.debug.print("Bottom:\n", .{});
-    try detectVerticalEdge(prop, stats.max_y, stats.min_x, stats.max_x);
+    try detectEdge(prop, .Vertical, stats.max_y, stats.min_x, stats.max_x);
     std.debug.print("Left:\n", .{});
-    try detectHorizonalEdge(prop, stats.min_x, stats.min_y, stats.max_y);
+    try detectEdge(prop, .Horizontal, stats.min_x, stats.min_y, stats.max_y);
     std.debug.print("Right:\n", .{});
-    try detectHorizonalEdge(prop, stats.max_x, stats.min_y, stats.max_y);
+    try detectEdge(prop, .Horizontal, stats.max_x, stats.min_y, stats.max_y);
 }
 
-/// Detect notch of top/bottom edge in range.
-inline fn detectVerticalEdge(prop: GrayImgProp, y: usize, left: usize, right: usize) !void {
-    std.debug.assert(left < right);
+/// Detect notch of edge in range with the given image direction.
+inline fn detectEdge(prop: GrayImgProp, dir: ImgEdgeDir, fixed: usize, head: usize, tail: usize) !void {
+    std.debug.assert(head < tail);
 
     var count: usize = 0;
-    var curr: usize = left + 1;
+    var curr: usize = head + 1;
 
-    while (curr <= right) {
-        const prev_bin_val = try prop.at(curr - 1, y);
-        const curr_bin_val = try prop.at(curr, y);
+    while (curr <= tail) {
+        const prev_val = switch (dir) {
+            .Vertical => try prop.at(curr - 1, fixed),
+            .Horizontal => try prop.at(fixed, curr - 1),
+        };
+        const curr_val = switch (dir) {
+            .Vertical => try prop.at(curr, fixed),
+            .Horizontal => try prop.at(fixed, curr),
+        };
 
-        if (prev_bin_val != 255 or curr_bin_val != 0) {
+        if (prev_val != 255 or curr_val != 0) {
             curr += 1;
             continue;
         }
 
         const start = curr;
-        while (curr <= right and try prop.at(curr, y) == 0) {
+
+        while (curr <= tail and try prop.at(curr, fixed) == 0) {
+            const curr_notch_val = switch (dir) {
+                .Vertical => try prop.at(curr, fixed),
+                .Horizontal => try prop.at(fixed, curr),
+            };
+            if (curr_notch_val != 0) break;
             curr += 1;
         }
 
         count += 1;
-        std.debug.print("  Len: {d}\n", .{transform(curr - start, prop.width)});
+        std.debug.print("  Length: {d}\n", .{transform(prop, curr - start, dir)});
     }
     std.debug.print("Total count: {d}\n", .{count});
     endPrint();
 }
 
-/// Detect notch of left/right edge in range.
-inline fn detectHorizonalEdge(prop: GrayImgProp, x: usize, top: usize, btm: usize) !void {
-    std.debug.assert(top < btm);
-
-    var count: usize = 0;
-    var curr: usize = top + 1;
-
-    while (curr <= btm) {
-        const prev_bin_val = try prop.at(x, curr - 1);
-        const curr_bin_val = try prop.at(x, curr);
-
-        if (prev_bin_val != 255 or curr_bin_val != 0) {
-            curr += 1;
-            continue;
-        }
-
-        const start = curr;
-        while (curr <= btm and try prop.at(x, curr) == 0) {
-            curr += 1;
-        }
-
-        count += 1;
-        std.debug.print("  Len: {d}\n", .{transform(curr - start, prop.height)});
-    }
-    std.debug.print("Total count: {d}\n", .{count});
-    endPrint();
-}
-
+/// Print the basic location info.
 inline fn debugBasicInfo(stats: BinaryStats) void {
     const box_w = stats.max_x - stats.min_x + 1;
     const box_h = stats.max_y - stats.min_y + 1;
@@ -162,9 +152,13 @@ inline fn debugBasicInfo(stats: BinaryStats) void {
     endPrint();
 }
 
-/// Transform the num in its side into the real.
-inline fn transform(num: usize, side_len: usize) usize {
+/// Transform the num with the given image direction.(1000 x 1000)
+inline fn transform(prop: GrayImgProp, num: usize, dir: ImgEdgeDir) usize {
     const real: usize = 1000;
+    const side_len = switch (dir) {
+        .Vertical => prop.width,
+        .Horizontal => prop.height,
+    };
 
     return (num * real + side_len / 2) / side_len;
 }
