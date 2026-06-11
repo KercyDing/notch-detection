@@ -25,8 +25,8 @@ const BinaryStats = struct {
     box_h: usize,
 };
 
-/// Direction of image edges.
-const ImgEdgeDir = enum {
+/// Side of image edges.
+const EdgeSide = enum {
     Top,
     Bottom,
     Left,
@@ -69,7 +69,7 @@ pub fn detectImage(app: *AppState) !void {
         //
         // debugBasicInfo(stats);
 
-        // 3. Detect notch of the edges in direction.
+        // 3. Detect notch of the edges in side.
         detectEdge(prop, stats, .Top);
         detectEdge(prop, stats, .Bottom);
         detectEdge(prop, stats, .Left);
@@ -122,41 +122,35 @@ fn getBinaryStats(prop: GrayImgProp, stats: *BinaryStats) !void {
     stats.box_h = stats.max_y - stats.min_y + 1;
 }
 
-/// Detect notch of edge in range with the given image direction.
-inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, dir: ImgEdgeDir) void {
-    const fixed = switch (dir) {
+/// Detect notch of edge in range with the given edge side.
+inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, side: EdgeSide) void {
+    const fixed = switch (side) {
         .Top => stats.min_y,
         .Bottom => stats.max_y,
         .Left => stats.min_x,
         .Right => stats.max_x,
     };
-    const head = switch (dir) {
+    const head = switch (side) {
         .Top, .Bottom => stats.min_x,
         .Left, .Right => stats.min_y,
     };
-    const tail = switch (dir) {
+    const tail = switch (side) {
         .Top, .Bottom => stats.max_x,
         .Left, .Right => stats.max_y,
     };
 
     std.debug.assert(head < tail);
 
-    std.debug.print("{s}:\n", .{@tagName(dir)});
+    std.debug.print("{s}:\n", .{@tagName(side)});
 
     var count: usize = 0;
     var curr: usize = head + 1;
 
     while (curr <= tail) {
-        const prev_val = switch (dir) {
-            .Top, .Bottom => prop.at(curr - 1, fixed),
-            .Left, .Right => prop.at(fixed, curr - 1),
-        };
-        const curr_val = switch (dir) {
-            .Top, .Bottom => prop.at(curr, fixed),
-            .Left, .Right => prop.at(fixed, curr),
-        };
+        const prev_has_white = hasWhiteWithBand(prop, side, fixed, curr - 1);
+        const curr_has_white = hasWhiteWithBand(prop, side, fixed, curr);
 
-        if (prev_val != 255 or curr_val != 0) {
+        if (!prev_has_white or curr_has_white) {
             curr += 1;
             continue;
         }
@@ -164,19 +158,31 @@ inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, dir: ImgEdgeDir) voi
         const start = curr;
 
         while (curr <= tail) {
-            const curr_notch_val = switch (dir) {
-                .Top, .Bottom => prop.at(curr, fixed),
-                .Left, .Right => prop.at(fixed, curr),
-            };
-            if (curr_notch_val != 0) break;
+            if (hasWhiteWithBand(prop, side, fixed, curr)) break;
             curr += 1;
         }
 
         count += 1;
-        std.debug.print("  Length: {d}\n", .{transform(stats, dir, curr - start)});
+        std.debug.print("  Length: {d}\n", .{transform(stats, side, curr - start)});
     }
     std.debug.print("Total count: {d}\n", .{count});
     endPrint();
+}
+
+/// Check if has white with the given band width.
+inline fn hasWhiteWithBand(prop: GrayImgProp, side: EdgeSide, fixed: usize, pos: usize) bool {
+    for (0..band_width) |i| {
+        const bin_val = switch (side) {
+            .Top => prop.at(pos, fixed + i),
+            .Bottom => prop.at(pos, fixed - i),
+            .Left => prop.at(fixed + i, pos),
+            .Right => prop.at(fixed - i, pos),
+        };
+
+        if (bin_val == 255) return true;
+    }
+
+    return false;
 }
 
 /// Print the basic location info.
@@ -194,10 +200,10 @@ inline fn debugBasicInfo(stats: BinaryStats) void {
     endPrint();
 }
 
-/// Transform the num with the given image direction.(1000 x 1000)
-inline fn transform(stats: BinaryStats, dir: ImgEdgeDir, num: usize) usize {
+/// Transform the num with the given edge side.(1000 x 1000)
+inline fn transform(stats: BinaryStats, side: EdgeSide, num: usize) usize {
     const real: usize = 1000;
-    const side_len = switch (dir) {
+    const side_len = switch (side) {
         .Top, .Bottom => stats.box_w,
         .Left, .Right => stats.box_h,
     };

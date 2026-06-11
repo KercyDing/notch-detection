@@ -11,7 +11,7 @@ r():
 
 % Format.
 f():
-    zig fmt .
+    zig fmt src
     echo 'Done.'
 
 % Clean Cache, Output and Pkg.
