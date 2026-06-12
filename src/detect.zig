@@ -1,7 +1,7 @@
 const std = @import("std");
 const endPrint = @import("root").endPrint;
 const image = @import("image.zig");
-const GrayImgProp = image.GrayImgProp;
+const BinaryImgProp = image.BinaryImgProp;
 const AppState = @import("root").AppState;
 
 pub var threshold_fraq: f32 = 20.0 / 255.0;
@@ -35,21 +35,25 @@ const EdgeSide = enum {
 
 /// Detect the notch of the image.
 pub fn detectImage(app: *AppState) !void {
+    const t = threshold();
     var stats = std.mem.zeroes(BinaryStats);
 
     if (app.img_bytes) |bytes| {
-        var prop = try image.imageBytesToGray(app.allocator, bytes);
-        defer prop.deinit(app.allocator);
+        var rgba_prop = try image.imgBytesToRgba(bytes);
+        defer rgba_prop.deinit();
+
+        var gray_prop = try image.rgbaToGray(app.allocator, rgba_prop);
+        defer gray_prop.deinit(app.allocator);
+
+        var binary_prop = try image.grayToBinary(app.allocator, gray_prop, t);
+        defer binary_prop.deinit(app.allocator);
 
         // 0. Initialize binary stats.
-        stats.min_x = prop.width;
-        stats.min_y = prop.height;
+        stats.min_x = binary_prop.width;
+        stats.min_y = binary_prop.height;
 
-        // 1. Transform gray prop into binary prop.
-        grayToBinary(&prop);
-
-        // 2. Get binary stats with binary prop.
-        getBinaryStats(prop, &stats) catch |err| {
+        // 1. Get binary stats with BinaryImgProp.
+        getBinaryStats(binary_prop, &stats) catch |err| {
             switch (err) {
                 error.NoWhiteDetected => {
                     std.log.err(
@@ -70,10 +74,10 @@ pub fn detectImage(app: *AppState) !void {
         // debugBasicInfo(stats);
 
         // 3. Detect notch of the edges in side.
-        detectEdge(prop, stats, .Top);
-        detectEdge(prop, stats, .Bottom);
-        detectEdge(prop, stats, .Left);
-        detectEdge(prop, stats, .Right);
+        const edges = [_]EdgeSide{ .Top, .Bottom, .Left, .Right };
+        for (edges) |edge| {
+            detectEdge(binary_prop, stats, edge);
+        }
     } else {
         std.log.err("Cannot find image.", .{});
         endPrint();
@@ -83,18 +87,8 @@ pub fn detectImage(app: *AppState) !void {
     app.status = .Detected;
 }
 
-/// Convey the GrayImgProp into binary.
-fn grayToBinary(prop: *GrayImgProp) void {
-    const t = threshold();
-    for (prop.pixels) |*pixel| {
-        if (pixel.* > t) {
-            pixel.* = 255;
-        } else pixel.* = 0;
-    }
-}
-
 /// Get binary stats.
-fn getBinaryStats(prop: GrayImgProp, stats: *BinaryStats) !void {
+fn getBinaryStats(prop: BinaryImgProp, stats: *BinaryStats) !void {
     const width = prop.width;
 
     for (prop.pixels, 0..) |pixel, idx| {
@@ -123,7 +117,7 @@ fn getBinaryStats(prop: GrayImgProp, stats: *BinaryStats) !void {
 }
 
 /// Detect notch of edge in range with the given edge side.
-inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, side: EdgeSide) void {
+inline fn detectEdge(prop: BinaryImgProp, stats: BinaryStats, side: EdgeSide) void {
     const fixed = switch (side) {
         .Top => stats.min_y,
         .Bottom => stats.max_y,
@@ -147,8 +141,8 @@ inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, side: EdgeSide) void
     var curr: usize = head + 1;
 
     while (curr <= tail) {
-        const prev_has_white = hasWhiteWithBand(prop, side, fixed, curr - 1);
-        const curr_has_white = hasWhiteWithBand(prop, side, fixed, curr);
+        const prev_has_white = hasWhite(prop, side, fixed, curr - 1);
+        const curr_has_white = hasWhite(prop, side, fixed, curr);
 
         if (!prev_has_white or curr_has_white) {
             curr += 1;
@@ -158,7 +152,7 @@ inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, side: EdgeSide) void
         const start = curr;
 
         while (curr <= tail) {
-            if (hasWhiteWithBand(prop, side, fixed, curr)) break;
+            if (hasWhite(prop, side, fixed, curr)) break;
             curr += 1;
         }
 
@@ -170,16 +164,14 @@ inline fn detectEdge(prop: GrayImgProp, stats: BinaryStats, side: EdgeSide) void
 }
 
 /// Check if has white with the given band width.
-inline fn hasWhiteWithBand(prop: GrayImgProp, side: EdgeSide, fixed: usize, pos: usize) bool {
+inline fn hasWhite(prop: BinaryImgProp, side: EdgeSide, fixed: usize, pos: usize) bool {
     for (0..band_width) |i| {
-        const bin_val = switch (side) {
-            .Top => prop.at(pos, fixed + i),
-            .Bottom => prop.at(pos, fixed - i),
-            .Left => prop.at(fixed + i, pos),
-            .Right => prop.at(fixed - i, pos),
+        return switch (side) {
+            .Top => prop.isWhite(pos, fixed + i),
+            .Bottom => prop.isWhite(pos, fixed - i),
+            .Left => prop.isWhite(fixed + i, pos),
+            .Right => prop.isWhite(fixed - i, pos),
         };
-
-        if (bin_val == 255) return true;
     }
 
     return false;

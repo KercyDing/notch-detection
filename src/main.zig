@@ -474,7 +474,7 @@ fn openImageDialog(app: *AppState) !void {
     errdefer app.allocator.free(img_bytes);
 
     // Get the img_prop of the given image.
-    const img_prop = try image.imageBytesToRgba(img_bytes);
+    const img_prop = try image.imgBytesToRgba(img_bytes);
     errdefer {
         var tmp = img_prop;
         tmp.deinit();

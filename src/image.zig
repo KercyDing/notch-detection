@@ -1,6 +1,5 @@
 const std = @import("std");
 const dvui = @import("dvui");
-const endPrint = @import("root").endPrint;
 
 /// Properties of rgba image.
 pub const RgbaImgProp = struct {
@@ -14,11 +13,14 @@ pub const RgbaImgProp = struct {
     }
 
     pub fn index(self: RgbaImgProp, x: usize, y: usize) usize {
+        std.debug.assert(x < self.width);
+        std.debug.assert(y < self.height);
+
         return (y * self.width + x) * 4;
     }
 
     /// Get the rgba value with the given pixel.
-    pub fn rgbaAt(self: RgbaImgProp, x: usize, y: usize) [4]u8 {
+    pub fn at(self: RgbaImgProp, x: usize, y: usize) [4]u8 {
         const i = self.index(x, y);
         return .{
             self.pixels[i + 0],
@@ -28,8 +30,8 @@ pub const RgbaImgProp = struct {
         };
     }
 
-    /// Get the gray value with the given pixel.
-    pub fn grayAt(self: RgbaImgProp, x: usize, y: usize) u8 {
+    /// Convert the rgba value into gray value.
+    pub fn toGray(self: RgbaImgProp, x: usize, y: usize) u8 {
         const i = self.index(x, y);
 
         const r: u16 = self.pixels[i + 0];
@@ -79,10 +81,63 @@ pub const GrayImgProp = struct {
     pub fn set(self: *GrayImgProp, x: usize, y: usize, value: u8) void {
         self.pixels[self.index(x, y)] = value;
     }
+
+    pub fn toBinary(self: GrayImgProp, x: usize, y: usize, threshold: u8) u8 {
+        if (self.at(x, y) > threshold) {
+            return 255;
+        } else return 0;
+    }
 };
 
-/// Change image bytes into RgbaImgProp.
-pub fn imageBytesToRgba(img_bytes: []const u8) !RgbaImgProp {
+/// Properties of binary image.
+pub const BinaryImgProp = struct {
+    width: usize,
+    height: usize,
+    pixels: []u8,
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+        width: usize,
+        height: usize,
+    ) !BinaryImgProp {
+        const len = try std.math.mul(usize, width, height);
+        const pixels = try allocator.alloc(u8, len);
+        return .{
+            .width = width,
+            .height = height,
+            .pixels = pixels,
+        };
+    }
+
+    pub fn deinit(self: *BinaryImgProp, allocator: std.mem.Allocator) void {
+        allocator.free(self.pixels);
+        self.* = undefined;
+    }
+
+    pub fn index(self: BinaryImgProp, x: usize, y: usize) usize {
+        std.debug.assert(x < self.width);
+        std.debug.assert(y < self.height);
+
+        return y * self.width + x;
+    }
+
+    pub fn at(self: BinaryImgProp, x: usize, y: usize) u8 {
+        return self.pixels[self.index(x, y)];
+    }
+
+    pub fn set(self: *BinaryImgProp, x: usize, y: usize, value: u8) void {
+        std.debug.assert(value == 0 or value == 255);
+
+        self.pixels[self.index(x, y)] = value;
+    }
+
+    pub fn isWhite(self: BinaryImgProp, x: usize, y: usize) bool {
+        return (self.at(x, y) == 255);
+    }
+};
+
+/// Convert image bytes into RgbaImgProp.
+pub fn imgBytesToRgba(img_bytes: []const u8) !RgbaImgProp {
     var w_i: c_int = 0;
     var h_i: c_int = 0;
     var channels: c_int = 0;
@@ -104,20 +159,31 @@ pub fn imageBytesToRgba(img_bytes: []const u8) !RgbaImgProp {
     };
 }
 
-/// Change image bytes into GrayImgProp.
-pub fn imageBytesToGray(allocator: std.mem.Allocator, img_bytes: []const u8) !GrayImgProp {
-    var rgba = try imageBytesToRgba(img_bytes);
-    defer rgba.deinit();
-
+/// Convert RgbaImgProp into GrayImgProp.
+pub fn rgbaToGray(allocator: std.mem.Allocator, rgba: RgbaImgProp) !GrayImgProp {
     var gray_img = try GrayImgProp.init(allocator, rgba.width, rgba.height);
 
     for (0..rgba.height) |y| {
         for (0..rgba.width) |x| {
-            gray_img.set(x, y, rgba.grayAt(x, y));
+            gray_img.set(x, y, rgba.toGray(x, y));
         }
     }
 
     return gray_img;
+}
+
+/// Convert GrayImgProp into BinaryImgProp.
+pub fn grayToBinary(allocator: std.mem.Allocator, gray: GrayImgProp, threshold: u8) !BinaryImgProp {
+    var binary_img = try BinaryImgProp.init(allocator, gray.width, gray.height);
+
+    for (0..gray.height) |y| {
+        for (0..gray.width) |x| {
+            const binary_val = gray.toBinary(x, y, threshold);
+            binary_img.set(x, y, binary_val);
+        }
+    }
+
+    return binary_img;
 }
 
 /// Get image pixels data with stb_image.
